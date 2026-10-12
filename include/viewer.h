@@ -87,29 +87,5 @@ void app_paint(App *a);
 void app_update_status(App *a);
 BOOL app_copy_image_to_clipboard(App *a);
 
-#define IDM_COPY 1000
-#define IDM_OPEN 1001
-#define IDM_RELOAD 1002
-#define IDM_EXIT 1003
-#define IDM_PREV 1010
-#define IDM_NEXT 1011
-#define IDM_FIRST 1012
-#define IDM_LAST 1013
-#define IDM_ZOOMIN 1020
-#define IDM_ZOOMOUT 1021
-#define IDM_ACTUAL 1022
-#define IDM_SHRINK 1023
-#define IDM_FIT 1024
-#define IDM_WIDTH 1025
-#define IDM_HEIGHT 1026
-#define IDM_LOCK 1027
-#define IDM_FULLSCREEN 1028
-#define IDM_SIMPLE 1029
-#define IDM_SETTINGS 1030
-#define IDM_ABOUT 1031
-#define IDM_SORT_NATURAL 1040
-#define IDM_SORT_NAME 1041
-#define IDM_SORT_DATE 1042
-#define IDM_SORT_SIZE 1043
-#define IDM_SORT_DESC 1044
+#include "resource.h"
 #endif

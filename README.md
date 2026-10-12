@@ -79,3 +79,6 @@ MSYS2 UCRT64 MinGW-w64 GCC. Without `-municode`, the linker may report
 ## クリップボードコピー (v1.4)
 
 Ctrl+C、［ファイル → 画像をコピー］、右クリックメニューから、表示中の画像を Windows 標準の `CF_DIB` 形式でコピーできます。画像を拡大・縮小していても、コピーは原寸解像度です。EXIF方向補正済みの画像が対象になります。透過部分は設定中の単色背景色（既定値 `#202020`）に合成した24bpp DIBで、アルファ情報は保持しません。ファイルのパスやファイル自体はコピーしません。画像のデコード中、または表示できない場合はエラーダイアログを表示します。
+
+## v1.5: Resources
+Menus, context menu, settings dialog, accelerator keys, error/about strings and icon/manifest are defined in `src/resource.rc`. Resource IDs are in `include/resource.h`. The C code handles resource commands and populates combo box options; it no longer constructs menus or dialog controls with `CreateWindow`. Build using `make clean && make` in MSYS2 UCRT64.

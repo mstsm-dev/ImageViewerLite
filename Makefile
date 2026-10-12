@@ -10,12 +10,12 @@ all: $(TARGET)
 $(TARGET): $(OBJECTS) build/resource.o
 	@mkdir -p dist
 	$(CC) $(OBJECTS) build/resource.o $(LDFLAGS) $(LDLIBS) -o $@
-build/%.o: src/%.c include/viewer.h
+build/%.o: src/%.c include/viewer.h include/resource.h
 	@mkdir -p build
 	$(CC) $(CFLAGS) -c $< -o $@
-build/resource.o: src/resource.rc src/LiteViewer.ico src/manifest.xml src/LiteViewer.ico src/manifest.xml
+build/resource.o: src/resource.rc src/LiteViewer.ico src/manifest.xml include/resource.h
 	@mkdir -p build
-	$(WINDRES) -i $< -o $@
+	$(WINDRES) --codepage=65001 -Iinclude -Isrc -i $< -o $@
 clean:
 	rm -rf build dist/*.exe
 .PHONY: all clean
