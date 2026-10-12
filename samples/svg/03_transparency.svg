@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 背景なし・半透明の重なり。市松模様表示（設定→背景）とCtrl+Cの背景合成の確認用。原寸 400×300 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+  <circle cx="150" cy="120" r="90" fill="#ff0000" fill-opacity="0.5"/>
+  <circle cx="250" cy="120" r="90" fill="#00c000" fill-opacity="0.5"/>
+  <circle cx="200" cy="200" r="90" fill="#0050ff" fill-opacity="0.5"/>
+  <rect x="20" y="250" width="360" height="30" fill="#000" opacity="0.25"/>
+</svg>

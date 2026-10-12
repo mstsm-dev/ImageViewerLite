@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 基本図形。原寸 480×320 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="320" viewBox="0 0 480 320">
+  <rect x="0" y="0" width="480" height="320" fill="#f4f1ea"/>
+  <rect x="30" y="30" width="140" height="100" rx="16" fill="#2a7ac8"/>
+  <circle cx="260" cy="80" r="50" fill="#e4572e"/>
+  <ellipse cx="400" cy="80" rx="55" ry="35" fill="#f3a712"/>
+  <line x1="30" y1="170" x2="450" y2="170" stroke="#333" stroke-width="4" stroke-linecap="round"/>
+  <polyline points="30,290 90,210 150,270 210,200 270,280" fill="none" stroke="#29335c" stroke-width="6" stroke-linejoin="round"/>
+  <polygon points="360,200 440,290 300,290 " fill="#669bbc" stroke="#003049" stroke-width="3"/>
+</svg>

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Direct2D 非対応要素の混在。図形だけが描画され、文字・CSS・フィルタ・マスク・パターンは無視される。原寸 480×320 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="320" viewBox="0 0 480 320">
+  <style>.css-styled { fill: #ff00ff; }</style>
+  <defs>
+    <filter id="blur"><feGaussianBlur stdDeviation="6"/></filter>
+    <mask id="m"><rect width="480" height="320" fill="white"/><circle cx="380" cy="230" r="40" fill="black"/></mask>
+    <pattern id="dots" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r="4" fill="#fff"/></pattern>
+  </defs>
+  <rect width="480" height="320" fill="#3a506b"/>
+  <!-- ↓ これらは描画される（対応要素） -->
+  <rect x="20" y="20" width="120" height="80" fill="#5bc0be"/>
+  <circle cx="240" cy="60" r="40" fill="#ffd166" style="stroke:#000;stroke-width:3"/>
+  <!-- ↓ ここから非対応 -->
+  <text x="20" y="160" font-size="36" fill="#fff">文字は表示されない</text>
+  <rect class="css-styled" x="20" y="200" width="120" height="80"/>
+  <rect x="180" y="200" width="120" height="80" fill="#ef476f" filter="url(#blur)"/>
+  <rect x="330" y="180" width="120" height="100" fill="#06d6a0" mask="url(#m)"/>
+  <rect x="330" y="20" width="120" height="80" fill="url(#dots)"/>
+</svg>

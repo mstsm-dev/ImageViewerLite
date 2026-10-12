@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- アイコン風（写真フレーム＋山・空・水辺）。小さい原寸 64×64 の拡大表示確認用 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4fa3ff"/>
+      <stop offset="1" stop-color="#bfe3ff"/>
+    </linearGradient>
+    <clipPath id="frameInner"><rect x="8" y="10" width="48" height="40" rx="3"/></clipPath>
+  </defs>
+  <rect x="4" y="6" width="56" height="48" rx="7" fill="#1e5aa8"/>
+  <g clip-path="url(#frameInner)">
+    <rect x="8" y="10" width="48" height="40" fill="url(#sky)"/>
+    <circle cx="44" cy="20" r="5" fill="#fff3b0"/>
+    <path d="M8,42 L22,24 L32,36 L40,28 L56,44 L56,50 L8,50 Z" fill="#2f7d4f"/>
+    <path d="M8,44 Q20,40 32,44 T56,44 L56,50 L8,50 Z" fill="#2a6fd6" fill-opacity="0.85"/>
+  </g>
+</svg>

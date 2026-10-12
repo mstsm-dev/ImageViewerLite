@@ -1,76 +1,94 @@
-#include "viewer.h"
-#include <stdint.h>
+/*
+ * clipboard.c — 表示中画像のクリップボードコピー
+ *
+ * 画面の拡大縮小結果ではなく、デコード済み（Orientation 適用後）の原寸画像を
+ * コピーする。貼り付け先との互換性を重視し、24bpp・ボトムアップ・
+ * 行4バイト境界の CF_DIB を使う。
+ */
+#include "clipboard.h"
+
 #include <limits.h>
-#include <wchar.h>
 #include <string.h>
 
-/* Copy the full decoded image, never the scaled window contents.
- * CF_DIB is a widely compatible 24-bit, bottom-up DIB; alpha pixels are
- * composited over the configured solid background color. */
-BOOL app_copy_image_to_clipboard(App *a)
+/* premultiplied BGRA の1行を、背景色と合成した BGR に変換する。 */
+static void convert_row(const BYTE *src, BYTE *dst, int width, COLORREF background)
 {
-    if (!a || !a->selectedPath || a->loading) return FALSE;
-    const CacheEntry *entry = NULL;
-    for (int i = 0; i < CACHE_SLOTS; ++i) {
-        if (a->cache[i].path &&
-            _wcsicmp(a->cache[i].path, a->selectedPath) == 0) {
-            entry = &a->cache[i];
-            break;
-        }
-    }
-    if (!entry || !entry->bits || entry->w <= 0 || entry->h <= 0) return FALSE;
+    const unsigned bgB = GetBValue(background);
+    const unsigned bgG = GetGValue(background);
+    const unsigned bgR = GetRValue(background);
 
-    uint64_t width = (uint64_t)entry->w;
-    uint64_t height = (uint64_t)entry->h;
-    uint64_t stride = ((width * 3u + 3u) & ~UINT64_C(3));
-    uint64_t byteCount = stride * height;
-    uint64_t total = sizeof(BITMAPINFOHEADER) + byteCount;
-    if (width > INT_MAX || height > INT_MAX || byteCount > UINT32_MAX ||
-        total > (uint64_t)SIZE_MAX) return FALSE;
+    for (int x = 0; x < width; ++x) {
+        const BYTE *s = src + (size_t)x * 4;
+        BYTE *d = dst + (size_t)x * 3;
+        unsigned inverse = 255u - s[3];
+        /* 前乗算済みなので「色 + 背景 × (1 - α)」で合成できる */
+        d[0] = (BYTE)(s[0] + (bgB * inverse + 127) / 255);
+        d[1] = (BYTE)(s[1] + (bgG * inverse + 127) / 255);
+        d[2] = (BYTE)(s[2] + (bgR * inverse + 127) / 255);
+    }
+}
+
+/* CF_DIB 用のメモリブロックを作る。失敗時は NULL。 */
+static HGLOBAL build_dib(const DecodedImage *image, COLORREF background)
+{
+    uint64_t width = (uint64_t)image->width;
+    uint64_t height = (uint64_t)image->height;
+    uint64_t stride = (width * 3 + 3) & ~UINT64_C(3);
+    uint64_t pixelBytes = stride * height;
+    uint64_t total = sizeof(BITMAPINFOHEADER) + pixelBytes;
+    if (pixelBytes > UINT32_MAX || total > SIZE_MAX) return NULL;
 
     HGLOBAL memory = GlobalAlloc(GMEM_MOVEABLE, (SIZE_T)total);
-    if (!memory) return FALSE;
-    BYTE *base = (BYTE *)GlobalLock(memory);
-    if (!base) { GlobalFree(memory); return FALSE; }
+    if (!memory) return NULL;
+    BYTE *base = GlobalLock(memory);
+    if (!base) {
+        GlobalFree(memory);
+        return NULL;
+    }
 
     BITMAPINFOHEADER *header = (BITMAPINFOHEADER *)base;
     memset(header, 0, sizeof(*header));
     header->biSize = sizeof(*header);
-    header->biWidth = entry->w;
-    header->biHeight = entry->h; /* positive: clipboard DIB is bottom-up */
+    header->biWidth = image->width;
+    header->biHeight = image->height; /* 正の値：ボトムアップ */
     header->biPlanes = 1;
     header->biBitCount = 24;
     header->biCompression = BI_RGB;
-    header->biSizeImage = (DWORD)byteCount;
+    header->biSizeImage = (DWORD)pixelBytes;
 
-    /* WIC's cached source is top-down, premultiplied BGRA. */
-    const BYTE *source = (const BYTE *)entry->bits;
-    BYTE *target = base + sizeof(BITMAPINFOHEADER);
-    const unsigned b = GetBValue(a->cfg.background);
-    const unsigned g = GetGValue(a->cfg.background);
-    const unsigned r = GetRValue(a->cfg.background);
-    for (int y = 0; y < entry->h; ++y) {
-        const BYTE *s = source + (size_t)y * (size_t)entry->w * 4;
-        BYTE *d = target + (size_t)(entry->h - 1 - y) * (size_t)stride;
-        for (int x = 0; x < entry->w; ++x) {
-            const unsigned alpha = s[x * 4 + 3];
-            const unsigned inverse = 255 - alpha;
-            d[x * 3 + 0] = (BYTE)((unsigned)s[x * 4 + 0] + (b * inverse + 127) / 255);
-            d[x * 3 + 1] = (BYTE)((unsigned)s[x * 4 + 1] + (g * inverse + 127) / 255);
-            d[x * 3 + 2] = (BYTE)((unsigned)s[x * 4 + 2] + (r * inverse + 127) / 255);
-        }
-        memset(d + (size_t)entry->w * 3, 0, (size_t)stride - (size_t)entry->w * 3);
+    const BYTE *source = image->bits; /* トップダウン */
+    BYTE *pixels = base + sizeof(BITMAPINFOHEADER);
+    size_t srcStride = (size_t)image->width * 4;
+    size_t padding = (size_t)stride - (size_t)image->width * 3;
+
+    for (int y = 0; y < image->height; ++y) {
+        const BYTE *srcRow = source + (size_t)y * srcStride;
+        BYTE *dstRow = pixels + (size_t)(image->height - 1 - y) * (size_t)stride;
+        convert_row(srcRow, dstRow, image->width, background);
+        memset(dstRow + (size_t)image->width * 3, 0, padding);
     }
-    GlobalUnlock(memory);
 
-    if (!OpenClipboard(a->hwnd)) { GlobalFree(memory); return FALSE; }
-    BOOL result = FALSE;
+    GlobalUnlock(memory);
+    return memory;
+}
+
+bool clipboard_copy_image(HWND owner, const DecodedImage *image, COLORREF background)
+{
+    if (!image || !image->bits || image->width <= 0 || image->height <= 0) return false;
+
+    HGLOBAL memory = build_dib(image, background);
+    if (!memory) return false;
+
+    if (!OpenClipboard(owner)) {
+        GlobalFree(memory);
+        return false;
+    }
+    bool ok = false;
     if (EmptyClipboard() && SetClipboardData(CF_DIB, memory)) {
-        /* Ownership transfers to the clipboard on success. */
-        memory = NULL;
-        result = TRUE;
+        memory = NULL; /* 成功時は所有権が OS に移る */
+        ok = true;
     }
     CloseClipboard();
     if (memory) GlobalFree(memory);
-    return result;
+    return ok;
 }

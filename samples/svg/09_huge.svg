@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="20000" height="10000" viewBox="0 0 200 100">
+  <!-- 20000×10000 → 1辺上限 16384 に合わせ縦横比を保って 16384×8192 で描画 -->
+  <rect width="200" height="100" fill="#0f4c5c"/>
+  <circle cx="100" cy="50" r="40" fill="#e36414"/>
+  <rect x="2" y="2" width="196" height="96" fill="none" stroke="#fb8b24" stroke-width="2"/>
+</svg>

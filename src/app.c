@@ -1,23 +1,277 @@
-#include "viewer.h"
+/*
+ * app.c — 画像を開く・移動・再読み込み・デコード結果の受け取り・倍率操作
+ *
+ * 表示要求の流れ
+ *   show_current() で世代番号を進め、キャッシュになければワーカーへ要求する。
+ *   ワーカーは「現在画像 → 次 → 前」の順にデコードし、WM_APP_DECODED で返す。
+ *   app_on_decoded() は世代が一致する結果だけを採用する（連続送り時は最新要求のみ）。
+ */
+#include "app.h"
+#include "formats.h"
+
+#include <commctrl.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <wchar.h>
-#include <math.h>
-#include <string.h>
 
-static CacheEntry *cache_find(App *a,const wchar_t *path){if(!path)return NULL;for(int i=0;i<CACHE_SLOTS;i++)if(a->cache[i].path&&_wcsicmp(a->cache[i].path,path)==0){a->cache[i].tick=++a->cacheClock;return &a->cache[i];}return NULL;}
-static void cache_release(CacheEntry *e){if(e->dc){if(e->oldBitmap)SelectObject(e->dc,e->oldBitmap);DeleteDC(e->dc);}if(e->bitmap)DeleteObject(e->bitmap);free(e->path);memset(e,0,sizeof(*e));}
-void app_clear_cache(App *a){for(int i=0;i<CACHE_SLOTS;i++)cache_release(&a->cache[i]);}
-static size_t cache_bytes(App *a){size_t n=0;for(int i=0;i<CACHE_SLOTS;i++)n+=a->cache[i].bytes;return n;}
-static void cache_trim(App *a){size_t used=cache_bytes(a);while(used>a->cfg.maxCacheBytes){CacheEntry *victim=NULL;for(int i=0;i<CACHE_SLOTS;i++){CacheEntry *e=&a->cache[i];if(!e->path|| (a->selectedPath&&!_wcsicmp(e->path,a->selectedPath)))continue;if(!victim||e->tick<victim->tick)victim=e;}if(!victim)break;used-=victim->bytes;cache_release(victim);}}
-static BOOL cache_add(App *a,DecodeResult *r){if(!r->image.pixels)return FALSE;if(cache_find(a,r->path))return TRUE;CacheEntry *e=NULL;for(int i=0;i<CACHE_SLOTS;i++)if(!a->cache[i].path){e=&a->cache[i];break;}if(!e){for(int i=0;i<CACHE_SLOTS;i++){CacheEntry *q=&a->cache[i];if(a->selectedPath&&!_wcsicmp(q->path,a->selectedPath))continue;if(!e||q->tick<e->tick)e=q;}}if(!e)return FALSE;cache_release(e);e->path=dupw(r->path);if(!e->path)return FALSE;BITMAPINFO bi={0};bi.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);bi.bmiHeader.biWidth=r->image.width;bi.bmiHeader.biHeight=-r->image.height;bi.bmiHeader.biPlanes=1;bi.bmiHeader.biBitCount=32;bi.bmiHeader.biCompression=BI_RGB;HDC screen=GetDC(a->hwnd);e->bitmap=CreateDIBSection(screen,&bi,DIB_RGB_COLORS,&e->bits,NULL,0);ReleaseDC(a->hwnd,screen);if(!e->bitmap){cache_release(e);return FALSE;}e->dc=CreateCompatibleDC(NULL);if(!e->dc){cache_release(e);return FALSE;}e->oldBitmap=SelectObject(e->dc,e->bitmap);if(!e->oldBitmap||e->oldBitmap==HGDI_ERROR){cache_release(e);return FALSE;}e->w=r->image.width;e->h=r->image.height;e->alpha=r->image.hasAlpha;e->bytes=(size_t)e->w*e->h*4;e->tick=++a->cacheClock;memcpy(e->bits,r->image.pixels,e->bytes);cache_trim(a);return TRUE;}
-void app_update_status(App *a){if(!a->status)return;wchar_t line[512];CacheEntry *e=cache_find(a,a->selectedPath);if(e)swprintf(line,512,L"  %zu / %zu     %d × %d     %.1f%%     %ls",a->files.index+1,a->files.count,e->w,e->h,a->zoom*100,a->loading?L"読み込み中":L"");else swprintf(line,512,L"  %zu / %zu     %ls",a->files.count?a->files.index+1:0,a->files.count,a->loading?L"読み込み中":a->error?L"読み込み失敗":L"");SendMessageW(a->status,SB_SETTEXTW,0,(LPARAM)line);}
-void app_refresh_ui(App *a){wchar_t title[1024];const wchar_t *name=(a->files.count&&a->files.index<a->files.count)?a->files.items[a->files.index].name:NULL;if(name)swprintf(title,1024,L"%.850ls - LiteViewer",name);else wcscpy(title,L"LiteViewer");SetWindowTextW(a->hwnd,title);app_update_status(a);InvalidateRect(a->hwnd,NULL,FALSE);}
-static void select_current(App *a,BOOL keepZoom){if(a->files.index>=a->files.count)return;free(a->selectedPath);a->selectedPath=dupw(a->files.items[a->files.index].path);a->generation++;a->error=FALSE;a->panX=a->panY=0;CacheEntry *existing=cache_find(a,a->selectedPath);a->loading=existing==NULL;if(!keepZoom){a->fit=a->cfg.initialFit;a->zoom=1;}if(existing&&!keepZoom)app_fit(a,a->fit);worker_request(a,existing!=NULL);app_refresh_ui(a);}
-void app_open(App *a,const wchar_t *path){DWORD attr=GetFileAttributesW(path);wchar_t *first=NULL;const wchar_t *target=path;if(attr!=INVALID_FILE_ATTRIBUTES&&(attr&FILE_ATTRIBUTE_DIRECTORY)){if(!files_directory_first(&first,path)){MessageBoxW(a->hwnd,L"フォルダに対応画像がありません。",APP_NAME,MB_OK|MB_ICONINFORMATION);return;}target=first;}FileList temp={0};if(!files_open(&temp,target,a->cfg.sort,a->cfg.descending)){MessageBoxW(a->hwnd,L"画像ファイルを開けません。対応形式とアクセス権を確認してください。",APP_NAME,MB_OK|MB_ICONWARNING);free(first);return;}files_close(&a->files);a->files=temp;select_current(a,FALSE);free(first);}
-void app_navigate(App *a,int change,BOOL absolute){if(a->files.count==0)return;size_t n=a->files.count,i=a->files.index;size_t next=i;if(absolute)next=(change<0)?0:n-1;else if(change>0)next=i+1<n?i+1:(a->cfg.loop?0:i);else if(change<0)next=i>0?i-1:(a->cfg.loop?n-1:i);if(next==i)return;a->files.index=next;select_current(a,a->zoomLock);}
-void app_reload(App *a){if(!a->selectedPath)return;wchar_t *path=dupw(a->selectedPath);if(!path)return;app_clear_cache(a);if(!files_open(&a->files,path,a->cfg.sort,a->cfg.descending)){a->loading=FALSE;a->error=TRUE;app_refresh_ui(a);}else select_current(a,FALSE);free(path);}
-void app_received(App *a,DecodeResult *r){if(r->generation!=a->generation)goto done;if(SUCCEEDED(r->hr)&&r->image.pixels){BOOL ok=cache_add(a,r);if(!r->prefetch&&a->selectedPath&&!_wcsicmp(r->path,a->selectedPath)){a->loading=FALSE;a->error=!ok;if(ok){if(a->zoomLock&&a->fit==FIT_MANUAL){InvalidateRect(a->hwnd,NULL,FALSE);}else if(a->zoomLock&&a->zoom>0){InvalidateRect(a->hwnd,NULL,FALSE);}else app_fit(a,a->fit);}}}else if(!r->prefetch){a->loading=FALSE;a->error=TRUE;}app_refresh_ui(a);
-done:decoded_free(&r->image);free(r->path);free(r);}
-void app_toggle_mode(App *a,WindowMode to){if(to==a->mode)return;BOOL wasFull=a->mode==VIEW_FULLSCREEN;BOOL goFull=to==VIEW_FULLSCREEN;if(goFull){a->oldPlacement.length=sizeof(WINDOWPLACEMENT);GetWindowPlacement(a->hwnd,&a->oldPlacement);a->oldStyle=GetWindowLongPtrW(a->hwnd,GWL_STYLE);a->oldExStyle=GetWindowLongPtrW(a->hwnd,GWL_EXSTYLE);SetWindowLongPtrW(a->hwnd,GWL_STYLE,(a->oldStyle&~(WS_CAPTION|WS_THICKFRAME|WS_SYSMENU|WS_MINIMIZEBOX|WS_MAXIMIZEBOX))|WS_POPUP);SetMenu(a->hwnd,NULL);ShowWindow(a->status,SW_HIDE);HMONITOR m=MonitorFromWindow(a->hwnd,MONITOR_DEFAULTTONEAREST);MONITORINFO info={.cbSize=sizeof(info)};GetMonitorInfoW(m,&info);SetWindowPos(a->hwnd,HWND_TOP,info.rcMonitor.left,info.rcMonitor.top,info.rcMonitor.right-info.rcMonitor.left,info.rcMonitor.bottom-info.rcMonitor.top,SWP_FRAMECHANGED|SWP_SHOWWINDOW);}
- else if(wasFull){SetWindowLongPtrW(a->hwnd,GWL_STYLE,a->oldStyle);SetWindowLongPtrW(a->hwnd,GWL_EXSTYLE,a->oldExStyle);SetWindowPlacement(a->hwnd,&a->oldPlacement);SetWindowPos(a->hwnd,NULL,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOZORDER|SWP_FRAMECHANGED);}
- a->mode=to;extern HMENU make_menu(void);if(!goFull)SetMenu(a->hwnd,to==VIEW_SIMPLE?NULL:make_menu());ShowWindow(a->status,to==VIEW_NORMAL&&a->cfg.statusbar?SW_SHOW:SW_HIDE);SendMessageW(a->hwnd,WM_SIZE,0,0);if(!a->zoomLock&&a->fit!=FIT_MANUAL)app_fit(a,a->fit);InvalidateRect(a->hwnd,NULL,FALSE);}
+/* ------------------------------------------------------------------------
+ * 内部処理
+ * ------------------------------------------------------------------------ */
+
+static Size image_size(const DecodedImage *image)
+{
+    Size size = { image->width, image->height };
+    return size;
+}
+
+static void invalidate(App *a)
+{
+    InvalidateRect(a->hwnd, NULL, FALSE);
+}
+
+static void update_status(App *a)
+{
+    if (!a->statusBar) return;
+
+    wchar_t line[512];
+    wchar_t state[64] = L"";
+    size_t position = a->files.count ? a->files.index + 1 : 0;
+    if (a->loading) res_string(IDS_STATUS_LOADING, state, ARRAY_COUNT(state));
+    else if (a->loadFailed) res_string(IDS_STATUS_FAILED, state, ARRAY_COUNT(state));
+
+    const DecodedImage *image = app_current_image(a);
+    if (image) {
+        const wchar_t *format = a->currentPath ? format_name(a->currentPath) : NULL;
+        swprintf(line, ARRAY_COUNT(line), L"  %zu / %zu     %d × %d     %.1f%%     %ls",
+                 position, a->files.count, image->width, image->height, a->view.zoom * 100.0,
+                 format ? format : L"");
+    } else {
+        swprintf(line, ARRAY_COUNT(line), L"  %zu / %zu     %ls", position, a->files.count, state);
+    }
+    SendMessageW(a->statusBar, SB_SETTEXTW, 0, (LPARAM)line);
+}
+
+static void update_title(App *a)
+{
+    wchar_t title[1024];
+    const FileEntry *entry = filelist_current(&a->files);
+    if (entry) swprintf(title, ARRAY_COUNT(title), L"%.900ls - %ls", entry->name, APP_NAME);
+    else swprintf(title, ARRAY_COUNT(title), L"%ls", APP_NAME);
+    SetWindowTextW(a->hwnd, title);
+}
+
+/* 倍率やパンだけが変わったときの更新 */
+static void refresh_view(App *a)
+{
+    update_status(a);
+    invalidate(a);
+}
+
+/* 現在画像（未キャッシュ時）と前後1枚の先読みをワーカーへ要求する。 */
+static void request_decode(App *a)
+{
+    DecodeJob jobs[WORKER_MAX_JOBS];
+    size_t count = 0;
+
+    if (a->currentPath && !cache_contains(&a->cache, a->currentPath)) {
+        jobs[count++] = (DecodeJob){ a->currentPath, false };
+    }
+
+    size_t index = a->files.index;
+    size_t next = filelist_step(&a->files, index, +1, a->cfg.loop);
+    size_t prev = filelist_step(&a->files, index, -1, a->cfg.loop);
+    if (next != SIZE_MAX && next != index && !cache_contains(&a->cache, a->files.items[next].path)) {
+        jobs[count++] = (DecodeJob){ a->files.items[next].path, true };
+    }
+    if (prev != SIZE_MAX && prev != index && prev != next
+        && !cache_contains(&a->cache, a->files.items[prev].path)) {
+        jobs[count++] = (DecodeJob){ a->files.items[prev].path, true };
+    }
+
+    /* ジョブが0件でも送る：世代が進み、処理中の古い要求が破棄される */
+    worker_submit(&a->worker, a->generation, jobs, count, a->cfg.autoOrientation);
+}
+
+/*
+ * 一覧の現在位置の画像を表示対象にする。
+ * keepZoom=false なら初期倍率を適用し、true なら倍率を引き継ぐ（ズーム固定）。
+ * どちらの場合もパン位置は中央に戻す。
+ */
+static void show_current(App *a, bool keepZoom)
+{
+    const FileEntry *entry = filelist_current(&a->files);
+    if (!entry) return;
+    wchar_t *path = str_dup(entry->path);
+    if (!path) return;
+
+    free(a->currentPath);
+    a->currentPath = path;
+    a->generation++;
+    a->loadFailed = false;
+    a->view.panX = 0;
+    a->view.panY = 0;
+    if (!keepZoom) {
+        a->view.fit = a->cfg.initialFit;
+        a->view.zoom = 1.0;
+    }
+
+    bool cached = cache_get(&a->cache, path) != NULL;
+    a->loading = !cached;
+    a->fitOnLoad = !keepZoom && !cached;
+    if (cached && !keepZoom) app_fit(a, a->view.fit);
+
+    request_decode(a);
+    app_update_ui(a);
+}
+
+static void finish_current_load(App *a, bool succeeded)
+{
+    a->loading = false;
+    a->loadFailed = !succeeded;
+    if (succeeded && a->fitOnLoad) app_fit(a, a->view.fit);
+    a->fitOnLoad = false;
+}
+
+/* 一覧を作り直し、現在画像を同じ位置に保つ。 */
+static FileListResult relist_current(App *a)
+{
+    wchar_t *path = str_dup(a->currentPath);
+    if (!path) return FILELIST_FAILED;
+    FileListResult result = filelist_load(&a->files, path, a->cfg.sort, a->cfg.descending);
+    free(path);
+    return result;
+}
+
+/* ------------------------------------------------------------------------
+ * 公開関数：ファイル・移動
+ * ------------------------------------------------------------------------ */
+
+void app_open(App *a, const wchar_t *path)
+{
+    switch (filelist_load(&a->files, path, a->cfg.sort, a->cfg.descending)) {
+    case FILELIST_OK:
+        /* 別フォルダを開くときはズーム固定でも初期倍率を適用する */
+        show_current(a, false);
+        break;
+    case FILELIST_NO_IMAGES:
+        res_message_box(a->hwnd, IDS_FOLDER_EMPTY, MB_OK | MB_ICONINFORMATION);
+        break;
+    case FILELIST_FAILED:
+        res_message_box(a->hwnd, IDS_OPEN_FAILED, MB_OK | MB_ICONWARNING);
+        break;
+    }
+}
+
+void app_navigate(App *a, int delta)
+{
+    size_t next = filelist_step(&a->files, a->files.index, delta, a->cfg.loop);
+    if (next == SIZE_MAX || next == a->files.index) return;
+    a->files.index = next;
+    show_current(a, a->cfg.zoomLock);
+}
+
+void app_navigate_edge(App *a, bool last)
+{
+    if (a->files.count == 0) return;
+    size_t target = last ? a->files.count - 1 : 0;
+    if (target == a->files.index) return;
+    a->files.index = target;
+    show_current(a, a->cfg.zoomLock);
+}
+
+void app_reload(App *a)
+{
+    if (!a->currentPath) return;
+    cache_clear(&a->cache);
+    if (relist_current(a) == FILELIST_OK) {
+        show_current(a, false);
+    } else {
+        a->loading = false;
+        a->loadFailed = true;
+        app_update_ui(a);
+    }
+}
+
+void app_change_sort(App *a, SortMode sort, bool descending)
+{
+    a->cfg.sort = sort;
+    a->cfg.descending = descending;
+    if (!a->currentPath) return;
+
+    /* 表示中の画像は変わらないので、キャッシュと表示状態は維持する */
+    if (relist_current(a) == FILELIST_OK) {
+        a->generation++;
+        request_decode(a); /* 前後の画像が変わるため先読みをやり直す */
+    }
+    app_update_ui(a);
+}
+
+void app_on_decoded(App *a, DecodeResult *r)
+{
+    if (r->generation == a->generation) {
+        bool isCurrent = !r->prefetch && path_equals(r->path, a->currentPath);
+        if (SUCCEEDED(r->hr)) {
+            bool stored = cache_put(&a->cache, r->path, &r->image, a->currentPath);
+            if (isCurrent) finish_current_load(a, stored);
+        } else if (isCurrent) {
+            finish_current_load(a, false);
+        }
+        app_update_ui(a);
+    }
+    decode_result_free(r);
+}
+
+const DecodedImage *app_current_image(App *a)
+{
+    return a->currentPath ? cache_get(&a->cache, a->currentPath) : NULL;
+}
+
+/* ------------------------------------------------------------------------
+ * 公開関数：倍率・パン
+ * ------------------------------------------------------------------------ */
+
+void app_fit(App *a, FitMode mode)
+{
+    const DecodedImage *image = app_current_image(a);
+    if (image) {
+        view_apply_fit(&a->view, mode, image_size(image), window_viewport(a));
+    } else {
+        /* 画像がまだないときはモードだけ覚え、読み込み完了時に適用する */
+        a->view.fit = mode;
+        a->view.zoom = 1.0;
+        a->view.panX = 0;
+        a->view.panY = 0;
+    }
+    refresh_view(a);
+}
+
+void app_zoom(App *a, double factor, int anchorX, int anchorY)
+{
+    const DecodedImage *image = app_current_image(a);
+    if (!image) return;
+    view_zoom_at(&a->view, factor, anchorX, anchorY, image_size(image), window_viewport(a));
+    refresh_view(a);
+}
+
+void app_zoom_center(App *a, double factor)
+{
+    Size viewport = window_viewport(a);
+    app_zoom(a, factor, viewport.width / 2, viewport.height / 2);
+}
+
+void app_pan(App *a, int dx, int dy)
+{
+    const DecodedImage *image = app_current_image(a);
+    if (!image) return;
+    a->view.panX += dx;
+    a->view.panY += dy;
+    view_clamp_pan(&a->view, image_size(image), window_viewport(a));
+    invalidate(a);
+}
+
+void app_update_ui(App *a)
+{
+    update_title(a);
+    update_status(a);
+    invalidate(a);
+}

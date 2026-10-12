@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <!-- サイズ指定も viewBox もなし → 既定 300×150 -->
+  <rect x="0" y="0" width="300" height="150" fill="#2b2d42"/>
+  <rect x="10" y="10" width="280" height="130" fill="none" stroke="#ef233c" stroke-width="4"/>
+</svg>

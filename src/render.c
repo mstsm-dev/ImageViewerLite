@@ -1,15 +1,164 @@
-#include "viewer.h"
-#include <stdlib.h>
-#include <math.h>
+/*
+ * render.c — GDI による描画
+ *
+ * GDI 資源の扱い：選択中のビットマップを削除する前に、必ず元のオブジェクトを
+ * SelectObject で戻す。
+ */
+#include "render.h"
+
 #include <string.h>
-static CacheEntry *selected(App *a){for(int i=0;i<CACHE_SLOTS;i++)if(a->cache[i].path&&a->selectedPath&&_wcsicmp(a->cache[i].path,a->selectedPath)==0)return &a->cache[i];return NULL;}
-void app_resize_backbuffer(App *a,int w,int h){if(a->backDC){SelectObject(a->backDC,a->backOld);DeleteObject(a->backBitmap);DeleteDC(a->backDC);a->backDC=NULL;}a->backW=w;a->backH=h;if(w<=0||h<=0)return;HDC screen=GetDC(a->hwnd);a->backDC=CreateCompatibleDC(screen);a->backBitmap=CreateCompatibleBitmap(screen,w,h);ReleaseDC(a->hwnd,screen);if(!a->backDC||!a->backBitmap){if(a->backBitmap)DeleteObject(a->backBitmap);if(a->backDC)DeleteDC(a->backDC);a->backDC=NULL;a->backBitmap=NULL;return;}a->backOld=SelectObject(a->backDC,a->backBitmap);}
-static void bounds(App *a,double sw,double sh,int w,int h){if(sw<=w)a->panX=0;else {double limit=(sw-w)/2;if(a->panX>limit)a->panX=limit;if(a->panX < -limit)a->panX=-limit;}if(sh<=h)a->panY=0;else {double limit=(sh-h)/2;if(a->panY>limit)a->panY=limit;if(a->panY < -limit)a->panY=-limit;}}
-static void viewport(App *a,int *w,int *h){RECT r;GetClientRect(a->hwnd,&r);*w=r.right-r.left;*h=r.bottom-r.top;}
-void app_render(App *a,HDC dc,int w,int h){if(w<=0||h<=0)return;HBRUSH b=CreateSolidBrush(a->cfg.background);RECT bg={0,0,w,h};FillRect(dc,&bg,b);DeleteObject(b);CacheEntry *e=selected(a);if(!e){SetBkMode(dc,TRANSPARENT);SetTextColor(dc,RGB(205,205,205));const wchar_t *str=a->loading?L"画像を読み込み中...":a->error?L"画像を表示できません":L"画像ファイルを開くか、ここにドロップしてください";DrawTextW(dc,str,-1,&bg,DT_CENTER|DT_VCENTER|DT_SINGLELINE);return;}
- double sw=e->w*a->zoom,sh=e->h*a->zoom;if(sw<=0||sh<=0)return;bounds(a,sw,sh,w,h);int x=(int)lround((w-sw)/2+a->panX),y=(int)lround((h-sh)/2+a->panY);int dw=(int)lround(sw),dh=(int)lround(sh);if(dw<=0||dh<=0)return;
- if(a->cfg.checkerboard&&e->alpha){RECT clip={x,y,x+dw,y+dh};if(clip.left<0)clip.left=0;if(clip.top<0)clip.top=0;if(clip.right>w)clip.right=w;if(clip.bottom>h)clip.bottom=h;HBRUSH light=CreateSolidBrush(RGB(205,205,205)),dark=CreateSolidBrush(RGB(150,150,150));for(int yy=clip.top;yy<clip.bottom;yy+=8)for(int xx=clip.left;xx<clip.right;xx+=8){RECT t={xx,yy,xx+8,yy+8};if(t.right>clip.right)t.right=clip.right;if(t.bottom>clip.bottom)t.bottom=clip.bottom;FillRect(dc,&t,(((xx-x)/8+(yy-y)/8)&1)?dark:light);}DeleteObject(light);DeleteObject(dark);}
- if(e->alpha){BLENDFUNCTION bf={AC_SRC_OVER,0,255,AC_SRC_ALPHA};AlphaBlend(dc,x,y,dw,dh,e->dc,0,0,e->w,e->h,bf);}else {SetStretchBltMode(dc,a->cfg.highQuality?HALFTONE:COLORONCOLOR);if(a->cfg.highQuality)SetBrushOrgEx(dc,0,0,NULL);StretchBlt(dc,x,y,dw,dh,e->dc,0,0,e->w,e->h,SRCCOPY);}}
-void app_paint(App *a){PAINTSTRUCT ps;HDC dc=BeginPaint(a->hwnd,&ps);RECT r;GetClientRect(a->hwnd,&r);int w=r.right,h=r.bottom;if(a->backW!=w||a->backH!=h)app_resize_backbuffer(a,w,h);if(a->backDC){app_render(a,a->backDC,w,h);BitBlt(dc,0,0,w,h,a->backDC,0,0,SRCCOPY);}else app_render(a,dc,w,h);EndPaint(a->hwnd,&ps);}
-void app_fit(App *a,FitMode mode){a->fit=mode;a->panX=a->panY=0;CacheEntry *e=selected(a);if(!e){a->zoom=1;InvalidateRect(a->hwnd,NULL,FALSE);return;}int w,h;viewport(a,&w,&h);if(w<1||h<1)return;double zx=(double)w/e->w,zy=(double)h/e->h;double z=zx<zy?zx:zy;switch(mode){case FIT_ALL:break;case FIT_SHRINK:if(z>1)z=1;break;case FIT_ACTUAL:z=1;break;case FIT_WIDTH:z=zx;break;case FIT_HEIGHT:z=zy;break;default:break;}a->zoom=z;InvalidateRect(a->hwnd,NULL,FALSE);app_update_status(a);}
-void app_zoom(App *a,double factor,int x,int y){CacheEntry *e=selected(a);if(!e)return;int w,h;viewport(a,&w,&h);double old=a->zoom;if(old<=0)return;double zoom=old*factor;if(zoom<0.01)zoom=0.01;if(zoom>32)zoom=32;if(zoom==old)return;double ox=(w-e->w*old)/2+a->panX,oy=(h-e->h*old)/2+a->panY;double fx=(x-ox)/old,fy=(y-oy)/old;a->zoom=zoom;a->fit=FIT_MANUAL;a->panX=x-fx*zoom-(w-e->w*zoom)/2;a->panY=y-fy*zoom-(h-e->h*zoom)/2;InvalidateRect(a->hwnd,NULL,FALSE);app_update_status(a);}
+
+#define CHECKER_CELL 8
+#define CHECKER_LIGHT RGB(205, 205, 205)
+#define CHECKER_DARK RGB(150, 150, 150)
+#define PLACEHOLDER_TEXT_COLOR RGB(205, 205, 205)
+
+/* 2×2 マスの市松模様を1枚のパターンブラシにする（毎回の FillRect ループを避ける）。 */
+static HBRUSH create_checker_brush(void)
+{
+    const int size = CHECKER_CELL * 2;
+    HDC screen = GetDC(NULL);
+    HDC dc = CreateCompatibleDC(screen);
+    HBITMAP bitmap = dc ? CreateCompatibleBitmap(screen, size, size) : NULL;
+    ReleaseDC(NULL, screen);
+    HBRUSH brush = NULL;
+
+    if (bitmap) {
+        HGDIOBJ old = SelectObject(dc, bitmap);
+        HBRUSH light = CreateSolidBrush(CHECKER_LIGHT);
+        HBRUSH dark = CreateSolidBrush(CHECKER_DARK);
+        RECT all = { 0, 0, size, size };
+        RECT topRight = { CHECKER_CELL, 0, size, CHECKER_CELL };
+        RECT bottomLeft = { 0, CHECKER_CELL, CHECKER_CELL, size };
+        FillRect(dc, &all, light);
+        FillRect(dc, &topRight, dark);
+        FillRect(dc, &bottomLeft, dark);
+        DeleteObject(light);
+        DeleteObject(dark);
+        SelectObject(dc, old);
+        brush = CreatePatternBrush(bitmap); /* ブラシはビットマップを複製して保持する */
+        DeleteObject(bitmap);
+    }
+    if (dc) DeleteDC(dc);
+    return brush;
+}
+
+bool renderer_init(Renderer *r)
+{
+    memset(r, 0, sizeof(*r));
+    r->sourceDC = CreateCompatibleDC(NULL);
+    r->checkerBrush = create_checker_brush();
+    return r->sourceDC != NULL;
+}
+
+static void release_backbuffer(Renderer *r)
+{
+    if (r->backDC) {
+        SelectObject(r->backDC, r->backOldBitmap);
+        DeleteDC(r->backDC);
+    }
+    if (r->backBitmap) DeleteObject(r->backBitmap);
+    r->backDC = NULL;
+    r->backBitmap = NULL;
+    r->backOldBitmap = NULL;
+    r->backWidth = r->backHeight = 0;
+}
+
+void renderer_free(Renderer *r)
+{
+    release_backbuffer(r);
+    if (r->sourceDC) DeleteDC(r->sourceDC);
+    if (r->checkerBrush) DeleteObject(r->checkerBrush);
+    memset(r, 0, sizeof(*r));
+}
+
+static bool ensure_backbuffer(Renderer *r, HDC target, int width, int height)
+{
+    if (r->backDC && r->backWidth == width && r->backHeight == height) return true;
+    release_backbuffer(r);
+
+    HDC dc = CreateCompatibleDC(target);
+    HBITMAP bitmap = CreateCompatibleBitmap(target, width, height);
+    if (!dc || !bitmap) {
+        if (bitmap) DeleteObject(bitmap);
+        if (dc) DeleteDC(dc);
+        return false;
+    }
+    r->backDC = dc;
+    r->backBitmap = bitmap;
+    r->backOldBitmap = SelectObject(dc, bitmap);
+    r->backWidth = width;
+    r->backHeight = height;
+    return true;
+}
+
+static void fill_solid(HDC dc, const RECT *rect, COLORREF color)
+{
+    HBRUSH brush = CreateSolidBrush(color);
+    FillRect(dc, rect, brush);
+    DeleteObject(brush);
+}
+
+static void draw_placeholder(HDC dc, RECT *area, const wchar_t *text)
+{
+    if (!text || !*text) return;
+    HGDIOBJ oldFont = SelectObject(dc, GetStockObject(DEFAULT_GUI_FONT));
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, PLACEHOLDER_TEXT_COLOR);
+    DrawTextW(dc, text, -1, area, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    SelectObject(dc, oldFont);
+}
+
+static void draw_checkerboard(Renderer *r, HDC dc, const RECT *imageRect, const RECT *area)
+{
+    RECT visible;
+    if (!r->checkerBrush || !IntersectRect(&visible, imageRect, area)) return;
+    /* 模様の原点を画像の左上に合わせる（パンしても模様が画像と一緒に動く） */
+    SetBrushOrgEx(dc, imageRect->left, imageRect->top, NULL);
+    FillRect(dc, &visible, r->checkerBrush);
+}
+
+static void draw_image(Renderer *r, HDC dc, const RenderScene *scene, const RECT *area)
+{
+    const DecodedImage *image = scene->image;
+    const RECT *dst = &scene->imageRect;
+    int dstW = dst->right - dst->left;
+    int dstH = dst->bottom - dst->top;
+    if (dstW <= 0 || dstH <= 0) return;
+
+    if (image->hasAlpha && scene->checkerboard) draw_checkerboard(r, dc, dst, area);
+
+    HGDIOBJ old = SelectObject(r->sourceDC, image->bitmap);
+    if (image->hasAlpha) {
+        BLENDFUNCTION blend = { AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
+        AlphaBlend(dc, dst->left, dst->top, dstW, dstH,
+                   r->sourceDC, 0, 0, image->width, image->height, blend);
+    } else {
+        SetStretchBltMode(dc, scene->highQuality ? HALFTONE : COLORONCOLOR);
+        if (scene->highQuality) SetBrushOrgEx(dc, 0, 0, NULL); /* HALFTONE 設定後に必要 */
+        StretchBlt(dc, dst->left, dst->top, dstW, dstH,
+                   r->sourceDC, 0, 0, image->width, image->height, SRCCOPY);
+    }
+    SelectObject(r->sourceDC, old);
+}
+
+static void draw_scene(Renderer *r, HDC dc, int width, int height, const RenderScene *scene)
+{
+    RECT area = { 0, 0, width, height };
+    fill_solid(dc, &area, scene->background);
+
+    if (scene->image && scene->image->bitmap) draw_image(r, dc, scene, &area);
+    else draw_placeholder(dc, &area, scene->placeholder);
+}
+
+void renderer_paint(Renderer *r, HDC target, int width, int height, const RenderScene *scene)
+{
+    if (width <= 0 || height <= 0) return;
+
+    if (ensure_backbuffer(r, target, width, height)) {
+        draw_scene(r, r->backDC, width, height, scene);
+        BitBlt(target, 0, 0, width, height, r->backDC, 0, 0, SRCCOPY);
+    } else {
+        draw_scene(r, target, width, height, scene); /* バックバッファが作れないときは直接描画 */
+    }
+}

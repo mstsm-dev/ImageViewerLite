@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 線形・放射グラデーション、spreadMethod。原寸 480×320 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="320" viewBox="0 0 480 320">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0b3d91"/>
+      <stop offset="1" stop-color="#8fd3ff"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fff6c2"/>
+      <stop offset="0.6" stop-color="#ffcc33"/>
+      <stop offset="1" stop-color="#ff8800" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="stripe" x1="0" y1="0" x2="0.1" y2="0" spreadMethod="reflect">
+      <stop offset="0" stop-color="#2e8b57"/>
+      <stop offset="1" stop-color="#a8e6a1"/>
+    </linearGradient>
+  </defs>
+  <rect width="480" height="320" fill="url(#sky)"/>
+  <circle cx="360" cy="110" r="90" fill="url(#sun)"/>
+  <rect x="0" y="230" width="480" height="90" fill="url(#stripe)"/>
+</svg>

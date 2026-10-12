@@ -1,0 +1,271 @@
+// ImageViewerLite リソース定義（UTF-8 で保存し、windres --codepage=65001 でビルドする）
+//
+// UI の構造・ラベル・ショートカット・固定文言はここに集約する。
+// ID は include/resource.h、版数は include/version.h で定義する。
+
+#include <windows.h>
+#include "resource.h"
+#include "version.h"
+
+#pragma code_page(65001)
+
+LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
+
+// ---------------------------------------------------------------------------
+// アイコン・マニフェスト
+// ---------------------------------------------------------------------------
+
+IDI_APP ICON "ImageViewerLite.ico"
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "manifest.xml"
+
+// ---------------------------------------------------------------------------
+// バージョン情報（Explorer のプロパティに表示）
+// ---------------------------------------------------------------------------
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     IVL_VERSION_MAJOR, IVL_VERSION_MINOR, IVL_VERSION_PATCH, 0
+PRODUCTVERSION  IVL_VERSION_MAJOR, IVL_VERSION_MINOR, IVL_VERSION_PATCH, 0
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+FILEFLAGS       0
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_APP
+FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "041104B0"
+    BEGIN
+      VALUE "FileDescription",  "ImageViewerLite - 軽量画像ビューア"
+      VALUE "FileVersion",      IVL_VERSION_STRING
+      VALUE "InternalName",     IVL_APP_NAME_STRING
+      VALUE "OriginalFilename", IVL_EXE_NAME_STRING
+      VALUE "ProductName",      IVL_APP_NAME_STRING
+      VALUE "ProductVersion",   IVL_VERSION_STRING
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x0411, 1200
+  END
+END
+
+// ---------------------------------------------------------------------------
+// メインメニュー
+// ---------------------------------------------------------------------------
+
+IDR_MAINMENU MENU
+BEGIN
+  POPUP "ファイル(&F)"
+  BEGIN
+    MENUITEM "開く(&O)...\tCtrl+O",        IDM_OPEN
+    MENUITEM "再読み込み(&R)\tF5",          IDM_RELOAD
+    MENUITEM "画像をコピー(&C)\tCtrl+C",    IDM_COPY
+    MENUITEM "画像の情報(&I)\tI",           IDM_IMAGEINFO
+    MENUITEM SEPARATOR
+    MENUITEM "終了(&X)\tEsc",               IDM_EXIT
+  END
+  POPUP "表示(&V)"
+  BEGIN
+    MENUITEM "原寸 100%\t1",                IDM_ACTUAL
+    MENUITEM "縮小のみフィット\t2",         IDM_SHRINK
+    MENUITEM "全体フィット\t3",             IDM_FIT
+    MENUITEM "横幅フィット\t4",             IDM_WIDTH
+    MENUITEM "縦幅フィット\t5",             IDM_HEIGHT
+    MENUITEM SEPARATOR
+    MENUITEM "拡大\t+",                     IDM_ZOOMIN
+    MENUITEM "縮小\t-",                     IDM_ZOOMOUT
+    MENUITEM "ズーム固定\tCtrl+L",          IDM_LOCK
+    MENUITEM SEPARATOR
+    MENUITEM "全画面\tF11",                 IDM_FULLSCREEN
+    MENUITEM "シンプルモード\tF10",         IDM_SIMPLE
+  END
+  POPUP "移動(&G)"
+  BEGIN
+    MENUITEM "前の画像\tLeft",              IDM_PREV
+    MENUITEM "次の画像\tRight",             IDM_NEXT
+    MENUITEM "最初\tUp",                    IDM_FIRST
+    MENUITEM "最後\tDown",                  IDM_LAST
+    MENUITEM SEPARATOR
+    POPUP "並べ替え"
+    BEGIN
+      MENUITEM "自然順",                    IDM_SORT_NATURAL
+      MENUITEM "名前順",                    IDM_SORT_NAME
+      MENUITEM "更新日時順",                IDM_SORT_DATE
+      MENUITEM "サイズ順",                  IDM_SORT_SIZE
+      MENUITEM SEPARATOR
+      MENUITEM "降順にする",                IDM_SORT_DESC
+    END
+  END
+  POPUP "設定(&S)"
+  BEGIN
+    MENUITEM "表示設定(&D)...",             IDM_SETTINGS
+  END
+  POPUP "ヘルプ(&H)"
+  BEGIN
+    MENUITEM "バージョン情報(&A)",          IDM_ABOUT
+  END
+END
+
+// ---------------------------------------------------------------------------
+// 右クリックメニュー（先頭のサブメニューを表示する）
+// ---------------------------------------------------------------------------
+
+IDR_POPUPMENU MENU
+BEGIN
+  POPUP "画像操作"
+  BEGIN
+    MENUITEM "前の画像",                    IDM_PREV
+    MENUITEM "次の画像",                    IDM_NEXT
+    MENUITEM SEPARATOR
+    MENUITEM "画像をコピー\tCtrl+C",        IDM_COPY
+    MENUITEM "画像の情報\tI",               IDM_IMAGEINFO
+    MENUITEM SEPARATOR
+    MENUITEM "原寸表示",                    IDM_ACTUAL
+    MENUITEM "縮小のみフィット",            IDM_SHRINK
+    MENUITEM "全体フィット",                IDM_FIT
+    MENUITEM "全画面切替",                  IDM_FULLSCREEN
+    MENUITEM SEPARATOR
+    MENUITEM "設定...",                     IDM_SETTINGS
+    MENUITEM "終了",                        IDM_EXIT
+  END
+END
+
+// ---------------------------------------------------------------------------
+// キーボードショートカット（仕様書 5章）
+// ---------------------------------------------------------------------------
+
+IDR_ACCELERATORS ACCELERATORS
+BEGIN
+  // ファイル
+  "O",          IDM_OPEN,       VIRTKEY, CONTROL
+  "C",          IDM_COPY,       VIRTKEY, CONTROL
+  "I",          IDM_IMAGEINFO,  VIRTKEY
+  VK_F5,        IDM_RELOAD,     VIRTKEY
+  VK_ESCAPE,    IDM_ESCAPE,     VIRTKEY
+
+  // 移動（方向キーによるパンは行わない）
+  VK_LEFT,      IDM_PREV,       VIRTKEY
+  VK_RIGHT,     IDM_NEXT,       VIRTKEY
+  VK_UP,        IDM_FIRST,      VIRTKEY
+  VK_DOWN,      IDM_LAST,       VIRTKEY
+
+  // 倍率
+  "1",          IDM_ACTUAL,     VIRTKEY
+  "2",          IDM_SHRINK,     VIRTKEY
+  "3",          IDM_FIT,        VIRTKEY
+  "4",          IDM_WIDTH,      VIRTKEY
+  "5",          IDM_HEIGHT,     VIRTKEY
+  VK_ADD,       IDM_ZOOMIN,     VIRTKEY            // テンキー +
+  VK_SUBTRACT,  IDM_ZOOMOUT,    VIRTKEY            // テンキー -
+  VK_OEM_PLUS,  IDM_ZOOMIN,     VIRTKEY            // メインキーの「;/+」(JIS)・「=/+」(US)
+  VK_OEM_PLUS,  IDM_ZOOMIN,     VIRTKEY, SHIFT
+  VK_OEM_MINUS, IDM_ZOOMOUT,    VIRTKEY            // メインキーの「-」
+  "L",          IDM_LOCK,       VIRTKEY, CONTROL
+
+  // 表示モード
+  VK_F11,       IDM_FULLSCREEN, VIRTKEY
+  VK_RETURN,    IDM_FULLSCREEN, VIRTKEY
+  VK_F10,       IDM_SIMPLE,     VIRTKEY
+END
+
+// ---------------------------------------------------------------------------
+// 表示設定ダイアログ（選択肢の文字列は STRINGTABLE、値の入出力は settings_dialog.c）
+// ---------------------------------------------------------------------------
+
+IDD_SETTINGS DIALOGEX 0, 0, 255, 207
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "ImageViewerLite - 表示設定"
+FONT 9, "MS Shell Dlg 2", 400, 0, 0x1
+BEGIN
+  LTEXT           "初期倍率",          -1,           12, 15,  75, 12
+  COMBOBOX        IDC_FIT,                           93, 12, 150, 100, CBS_DROPDOWNLIST | WS_TABSTOP | WS_VSCROLL
+  LTEXT           "背景",              -1,           12, 47,  75, 12
+  COMBOBOX        IDC_BACKGROUND,                    93, 44, 150,  90, CBS_DROPDOWNLIST | WS_TABSTOP | WS_VSCROLL
+  LTEXT           "描画品質",          -1,           12, 79,  75, 12
+  COMBOBOX        IDC_QUALITY,                       93, 76, 150,  70, CBS_DROPDOWNLIST | WS_TABSTOP | WS_VSCROLL
+  CONTROL         "ズーム固定",        IDC_ZOOMLOCK, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 14, 115, 205, 13
+  CONTROL         "画像送りをループ",  IDC_LOOP,     "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 14, 137, 205, 13
+  DEFPUSHBUTTON   "OK",                IDOK,        124, 174,  55, 16
+  PUSHBUTTON      "キャンセル",        IDCANCEL,    185, 174,  58, 16
+END
+
+// ---------------------------------------------------------------------------
+// 画像情報ダイアログ（表示値は info_dialog.c で設定。すべて読み取り専用）
+// ---------------------------------------------------------------------------
+
+IDD_IMAGEINFO DIALOGEX 0, 0, 370, 270
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "ImageViewerLite - 画像の情報"
+FONT 9, "MS Shell Dlg 2", 400, 0, 0x1
+BEGIN
+  LTEXT     "ファイル名",           -1,  10,  15, 103, 13
+  EDITTEXT  IDC_INFO_FILENAME,          118,  12, 240, 15, ES_AUTOHSCROLL | ES_READONLY | WS_BORDER
+  LTEXT     "ファイルの場所",       -1,  10,  38, 103, 13
+  EDITTEXT  IDC_INFO_DIRECTORY,         118,  35, 240, 15, ES_AUTOHSCROLL | ES_READONLY | WS_BORDER
+  LTEXT     "フルパス",             -1,  10,  61, 103, 13
+  EDITTEXT  IDC_INFO_FULLPATH,          118,  58, 240, 15, ES_AUTOHSCROLL | ES_READONLY | WS_BORDER
+  LTEXT     "ファイル形式",         -1,  10,  84, 103, 13
+  EDITTEXT  IDC_INFO_FORMAT,            118,  81, 240, 15, ES_AUTOHSCROLL | ES_READONLY | WS_BORDER
+  LTEXT     "元のサイズ",           -1,  10, 107, 103, 13
+  EDITTEXT  IDC_INFO_ORIGINAL,          118, 104, 240, 15, ES_AUTOHSCROLL | ES_READONLY | WS_BORDER
+  LTEXT     "現在のサイズ",         -1,  10, 130, 103, 13
+  EDITTEXT  IDC_INFO_CURRENT,           118, 127, 240, 15, ES_AUTOHSCROLL | ES_READONLY | WS_BORDER
+  LTEXT     "ディスク上のサイズ",   -1,  10, 153, 103, 13
+  EDITTEXT  IDC_INFO_DISKSIZE,          118, 150, 240, 15, ES_AUTOHSCROLL | ES_READONLY | WS_BORDER
+  LTEXT     "メモリ上のサイズ",     -1,  10, 176, 103, 13
+  EDITTEXT  IDC_INFO_MEMORYSIZE,        118, 173, 240, 15, ES_AUTOHSCROLL | ES_READONLY | WS_BORDER
+  LTEXT     "フォルダ内の順番",     -1,  10, 199, 103, 13
+  EDITTEXT  IDC_INFO_POSITION,          118, 196, 240, 15, ES_AUTOHSCROLL | ES_READONLY | WS_BORDER
+  LTEXT     "ファイルの更新日時",   -1,  10, 222, 103, 13
+  EDITTEXT  IDC_INFO_MODIFIED,          118, 219, 240, 15, ES_AUTOHSCROLL | ES_READONLY | WS_BORDER
+  DEFPUSHBUTTON "OK",               IDOK, 156, 245,  58, 17
+END
+
+// ---------------------------------------------------------------------------
+// 文字列
+// ---------------------------------------------------------------------------
+
+STRINGTABLE
+BEGIN
+  // メッセージ（IDS_ABOUT_FORMAT の %ls はアプリ名と版数）
+  IDS_ABOUT_FORMAT        "%ls %ls\nC11 / Win32 / WIC / Direct2D (SVG) / GDI\n閲覧専用の軽量画像ビューア"
+  IDS_CLIPBOARD_ERROR     "表示中の画像をクリップボードにコピーできません。画像の読込完了後に再試行してください。"
+  IDS_SAVE_ERROR          "INIを保存できませんでした。設定は今回の実行中だけ有効です。"
+  IDS_WORKER_ERROR        "画像読込スレッドを作成できません。"
+  IDS_INIT_ERROR          "ウィンドウまたはリソースを初期化できません。"
+  IDS_FOLDER_EMPTY        "フォルダに対応画像がありません。"
+  IDS_OPEN_FAILED         "画像ファイルを開けません。対応形式とアクセス権を確認してください。"
+
+  // 画面表示
+  IDS_PLACEHOLDER_EMPTY   "画像ファイルを開くか、ここにドロップしてください"
+  IDS_PLACEHOLDER_LOADING "画像を読み込み中..."
+  IDS_PLACEHOLDER_ERROR   "画像を表示できません"
+  IDS_STATUS_LOADING      "読み込み中"
+  IDS_STATUS_FAILED       "読み込み失敗"
+
+  // ファイル選択ダイアログ（拡張子の一覧は formats.c から作る）
+  IDS_FILTER_IMAGES       "画像ファイル"
+  IDS_FILTER_ALL          "すべてのファイル"
+
+  // 設定ダイアログの選択肢（IDS_FIT_* は FitMode と同順）
+  IDS_FIT_SHRINK          "大きい画像のみ縮小"
+  IDS_FIT_ALL             "全体に合わせる"
+  IDS_FIT_ACTUAL          "原寸"
+  IDS_FIT_WIDTH           "横幅に合わせる"
+  IDS_FIT_HEIGHT          "縦幅に合わせる"
+  IDS_BG_DARK             "ダークグレー (#202020)"
+  IDS_BG_BLACK            "ブラック (#000000)"
+  IDS_BG_CHECKER          "市松模様"
+  IDS_QUALITY_HIGH        "高品質 (HALFTONE)"
+  IDS_QUALITY_FAST        "高速 (COLORONCOLOR)"
+
+  // 画像情報ダイアログ（書式指定子の順番と型を変えないこと）
+  IDS_INFO_LOADING        "読み込み中"
+  IDS_INFO_UNAVAILABLE    "取得できません"
+  IDS_INFO_NONE           "—"
+  IDS_INFO_UNKNOWN        "不明"
+  IDS_INFO_PIXELS         "%d × %d ピクセル"
+  IDS_INFO_ZOOMED         "%.0f × %.0f ピクセル (%.1f%%)"
+  IDS_INFO_BYTES_KIB      "%.2f KiB (%llu バイト)"
+  IDS_INFO_BYTES_MIB      "%.2f MiB (%llu バイト)"
+END

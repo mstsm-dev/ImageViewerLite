@@ -1,22 +1,192 @@
-#include "viewer.h"
-#include <stdlib.h>
-#include <string.h>
+/*
+ * decoder.c — 画像デコード（WIC によるラスター画像と、SVG への振り分け）
+ */
+#include "decoder.h"
+#include "formats.h"
+#include "svg.h"
+
 #include <limits.h>
 #include <propidl.h>
+#include <string.h>
 
-void decoded_free(Decoded *d){free(d->pixels);memset(d,0,sizeof(*d));}
-static WICBitmapTransformOptions orientation_transform(UINT o){switch(o){case 2:return WICBitmapTransformFlipHorizontal;case 3:return WICBitmapTransformRotate180;case 4:return WICBitmapTransformFlipVertical;case 5:return WICBitmapTransformRotate90|WICBitmapTransformFlipHorizontal;case 6:return WICBitmapTransformRotate90;case 7:return WICBitmapTransformRotate270|WICBitmapTransformFlipHorizontal;case 8:return WICBitmapTransformRotate270;default:return WICBitmapTransformRotate0;}}
-HRESULT decode_wic(const wchar_t *path,BOOL orientation,Decoded *out){
- memset(out,0,sizeof(*out));IWICImagingFactory *factory=NULL;IWICBitmapDecoder *decoder=NULL;IWICBitmapFrameDecode *frame=NULL;IWICBitmapFlipRotator *rot=NULL;IWICFormatConverter *conv=NULL;IWICMetadataQueryReader *meta=NULL;IWICBitmapSource *source=NULL;HRESULT hr=CoCreateInstance(&CLSID_WICImagingFactory,NULL,CLSCTX_INPROC_SERVER,&IID_IWICImagingFactory,(void**)&factory);if(FAILED(hr))goto done;
- hr=IWICImagingFactory_CreateDecoderFromFilename(factory,path,NULL,GENERIC_READ,WICDecodeMetadataCacheOnDemand,&decoder);if(FAILED(hr))goto done;hr=IWICBitmapDecoder_GetFrame(decoder,0,&frame);if(FAILED(hr))goto done;source=(IWICBitmapSource*)frame;
- UINT ori=1;if(orientation&&SUCCEEDED(IWICBitmapFrameDecode_GetMetadataQueryReader(frame,&meta))){PROPVARIANT pv;memset(&pv,0,sizeof(pv));if(SUCCEEDED(IWICMetadataQueryReader_GetMetadataByName(meta,L"/app1/ifd/{ushort=274}",&pv))){if(pv.vt==VT_UI2)ori=pv.uiVal;else if(pv.vt==VT_UI4)ori=pv.ulVal;}PropVariantClear(&pv);}
- if(ori>=2&&ori<=8){hr=IWICImagingFactory_CreateBitmapFlipRotator(factory,&rot);if(FAILED(hr))goto done;hr=IWICBitmapFlipRotator_Initialize(rot,source,orientation_transform(ori));if(FAILED(hr))goto done;source=(IWICBitmapSource*)rot;}
- hr=IWICImagingFactory_CreateFormatConverter(factory,&conv);if(FAILED(hr))goto done;hr=IWICFormatConverter_Initialize(conv,source,&GUID_WICPixelFormat32bppPBGRA,WICBitmapDitherTypeNone,NULL,0.0,WICBitmapPaletteTypeCustom);if(FAILED(hr))goto done;
- UINT w=0,h=0;hr=IWICFormatConverter_GetSize(conv,&w,&h);if(FAILED(hr))goto done;if(w==0||h==0||w>INT_MAX/4||h>INT_MAX){hr=E_INVALIDARG;goto done;}uint64_t bytes=(uint64_t)w*h*4;if(bytes>MAX_IMAGE_BYTES||bytes>UINT32_MAX){hr=E_OUTOFMEMORY;goto done;}BYTE *bits=malloc((size_t)bytes);if(!bits){hr=E_OUTOFMEMORY;goto done;}hr=IWICFormatConverter_CopyPixels(conv,NULL,w*4,(UINT)bytes,bits);if(FAILED(hr)){free(bits);goto done;}out->pixels=bits;out->width=(int)w;out->height=(int)h;out->stride=(int)w*4;out->hasAlpha=FALSE;for(uint64_t i=3;i<bytes;i+=4)if(bits[i]!=255){out->hasAlpha=TRUE;break;}
-done:if(meta)IWICMetadataQueryReader_Release(meta);if(conv)IWICFormatConverter_Release(conv);if(rot)IWICBitmapFlipRotator_Release(rot);if(frame)IWICBitmapFrameDecode_Release(frame);if(decoder)IWICBitmapDecoder_Release(decoder);if(factory)IWICImagingFactory_Release(factory);return hr;}
+/* JPEG の EXIF Orientation（タグ 274） */
+static const wchar_t ORIENTATION_QUERY[] = L"/app1/ifd/{ushort=274}";
 
-static BOOL changed(App *a,unsigned long gen){EnterCriticalSection(&a->requestLock);BOOL changed=a->stopping||gen!=a->requestGeneration;LeaveCriticalSection(&a->requestLock);return changed;}
-static void send_result(App *a,const wchar_t *path,unsigned long gen,BOOL prefetch){if(!path||changed(a,gen))return;DecodeResult *r=calloc(1,sizeof(*r));if(!r)return;r->path=dupw(path);if(!r->path){free(r);return;}r->generation=gen;r->prefetch=prefetch;r->hr=decode_wic(path,a->cfg.autoOrientation,&r->image);if(changed(a,gen)||!PostMessageW(a->hwnd,WM_DECODED,0,(LPARAM)r)){decoded_free(&r->image);free(r->path);free(r);}}
-DWORD WINAPI decode_worker(void *p){App *a=p;HRESULT hr=CoInitializeEx(NULL,COINIT_MULTITHREADED);BOOL com=SUCCEEDED(hr);if(!com)return 0;for(;;){WaitForSingleObject(a->event,INFINITE);EnterCriticalSection(&a->requestLock);BOOL stop=a->stopping;wchar_t *current=dupw(a->requested);wchar_t *next=dupw(a->requestNext);wchar_t *prev=dupw(a->requestPrev);unsigned long gen=a->requestGeneration;BOOL skip=a->requestSkipCurrent;LeaveCriticalSection(&a->requestLock);if(stop){free(current);free(next);free(prev);break;}if(!skip)send_result(a,current,gen,FALSE);if(!changed(a,gen)){send_result(a,next,gen,TRUE);send_result(a,prev,gen,TRUE);}free(current);free(next);free(prev);}CoUninitialize();return 0;}
-void worker_request(App *a,BOOL skip){EnterCriticalSection(&a->requestLock);free(a->requested);free(a->requestNext);free(a->requestPrev);a->requested=dupw(a->selectedPath);a->requestNext=a->requestPrev=NULL;size_t n=a->files.count,i=a->files.index;if(n>1&&i<n){size_t ni=i+1<n?i+1:(a->cfg.loop?0:i);size_t pi=i>0?i-1:(a->cfg.loop?n-1:i);if(ni!=i)a->requestNext=dupw(a->files.items[ni].path);if(pi!=i&&pi!=ni)a->requestPrev=dupw(a->files.items[pi].path);}a->requestGeneration=a->generation;a->requestSkipCurrent=skip;LeaveCriticalSection(&a->requestLock);SetEvent(a->event);}
-void worker_stop(App *a){if(!a->worker)return;EnterCriticalSection(&a->requestLock);a->stopping=TRUE;LeaveCriticalSection(&a->requestLock);SetEvent(a->event);WaitForSingleObject(a->worker,INFINITE);CloseHandle(a->worker);CloseHandle(a->event);a->worker=NULL;a->event=NULL;free(a->requested);free(a->requestNext);free(a->requestPrev);DeleteCriticalSection(&a->requestLock);}
+void decoded_image_free(DecodedImage *image)
+{
+    if (!image) return;
+    if (image->bitmap) DeleteObject(image->bitmap);
+    memset(image, 0, sizeof(*image));
+}
+
+/* EXIF Orientation を読む。タグがない・読めないときは 1（補正なし）。 */
+static UINT read_orientation(IWICBitmapFrameDecode *frame)
+{
+    UINT orientation = 1;
+    IWICMetadataQueryReader *reader = NULL;
+    if (FAILED(IWICBitmapFrameDecode_GetMetadataQueryReader(frame, &reader))) return orientation;
+
+    PROPVARIANT value;
+    PropVariantInit(&value);
+    if (SUCCEEDED(IWICMetadataQueryReader_GetMetadataByName(reader, ORIENTATION_QUERY, &value))) {
+        if (value.vt == VT_UI2) orientation = value.uiVal;
+        else if (value.vt == VT_UI4) orientation = value.ulVal;
+    }
+    PropVariantClear(&value);
+    IWICMetadataQueryReader_Release(reader);
+    return orientation;
+}
+
+/* EXIF Orientation（1〜8）を WIC の変換指定に対応づける。 */
+static WICBitmapTransformOptions orientation_transform(UINT orientation)
+{
+    switch (orientation) {
+    case 2: return WICBitmapTransformFlipHorizontal;
+    case 3: return WICBitmapTransformRotate180;
+    case 4: return WICBitmapTransformFlipVertical;
+    case 5: return WICBitmapTransformRotate90 | WICBitmapTransformFlipHorizontal;
+    case 6: return WICBitmapTransformRotate90;
+    case 7: return WICBitmapTransformRotate270 | WICBitmapTransformFlipHorizontal;
+    case 8: return WICBitmapTransformRotate270;
+    default: return WICBitmapTransformRotate0;
+    }
+}
+
+/* ------------------------------------------------------------------------
+ * DecodedImage
+ * ------------------------------------------------------------------------ */
+
+HRESULT decoded_image_create(int width, int height, DecodedImage *out)
+{
+    memset(out, 0, sizeof(*out));
+    if (width <= 0 || height <= 0 || width > INT_MAX / 4) return E_INVALIDARG;
+
+    uint64_t bytes = (uint64_t)width * 4 * (uint64_t)height;
+    if (bytes > DECODER_MAX_IMAGE_BYTES || bytes > UINT_MAX) return E_OUTOFMEMORY;
+
+    BITMAPINFO info = { 0 };
+    info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    info.bmiHeader.biWidth = width;
+    info.bmiHeader.biHeight = -height; /* 負の値でトップダウン */
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB;
+
+    void *bits = NULL;
+    HBITMAP bitmap = CreateDIBSection(NULL, &info, DIB_RGB_COLORS, &bits, NULL, 0);
+    if (!bitmap || !bits) {
+        if (bitmap) DeleteObject(bitmap);
+        return E_OUTOFMEMORY;
+    }
+    out->bitmap = bitmap;
+    out->bits = bits;
+    out->width = width;
+    out->height = height;
+    out->bytes = (size_t)bytes;
+    return S_OK;
+}
+
+void decoded_image_finish(DecodedImage *image)
+{
+    GdiFlush();
+    const BYTE *pixels = image->bits;
+    image->hasAlpha = false;
+    for (size_t i = 3; i < image->bytes; i += 4) {
+        if (pixels[i] != 0xFF) {
+            image->hasAlpha = true;
+            break;
+        }
+    }
+}
+
+/* ------------------------------------------------------------------------
+ * WIC（ラスター画像）
+ * ------------------------------------------------------------------------ */
+
+static HRESULT decode_wic(IWICImagingFactory *factory, const wchar_t *path, bool autoOrientation,
+                          DecodedImage *out)
+{
+    IWICBitmapDecoder *decoder = NULL;
+    IWICBitmapFrameDecode *frame = NULL;
+    IWICBitmapFlipRotator *rotator = NULL;
+    IWICFormatConverter *converter = NULL;
+    IWICBitmapSource *source = NULL;
+    UINT orientation = 1;
+    UINT width = 0, height = 0;
+
+    HRESULT hr = IWICImagingFactory_CreateDecoderFromFilename(
+        factory, path, NULL, GENERIC_READ, WICDecodeMetadataCacheOnDemand, &decoder);
+    if (FAILED(hr)) goto done;
+
+    /* GIF / TIFF / ICO も先頭フレームのみ */
+    hr = IWICBitmapDecoder_GetFrame(decoder, 0, &frame);
+    if (FAILED(hr)) goto done;
+    source = (IWICBitmapSource *)frame;
+
+    /* 表示向きの補正 */
+    if (autoOrientation) orientation = read_orientation(frame);
+    if (orientation >= 2 && orientation <= 8) {
+        hr = IWICImagingFactory_CreateBitmapFlipRotator(factory, &rotator);
+        if (FAILED(hr)) goto done;
+        hr = IWICBitmapFlipRotator_Initialize(rotator, source, orientation_transform(orientation));
+        if (FAILED(hr)) goto done;
+        source = (IWICBitmapSource *)rotator;
+    }
+
+    /* 32bpp premultiplied BGRA へ変換 */
+    hr = IWICImagingFactory_CreateFormatConverter(factory, &converter);
+    if (FAILED(hr)) goto done;
+    hr = IWICFormatConverter_Initialize(converter, source, &GUID_WICPixelFormat32bppPBGRA,
+                                        WICBitmapDitherTypeNone, NULL, 0.0,
+                                        WICBitmapPaletteTypeCustom);
+    if (FAILED(hr)) goto done;
+
+    /* 寸法とバッファサイズの検査を通った場合だけ DIB セクションへ直接展開 */
+    hr = IWICFormatConverter_GetSize(converter, &width, &height);
+    if (FAILED(hr)) goto done;
+    if (width > INT_MAX || height > INT_MAX) {
+        hr = E_INVALIDARG;
+        goto done;
+    }
+    hr = decoded_image_create((int)width, (int)height, out);
+    if (FAILED(hr)) goto done;
+    hr = IWICFormatConverter_CopyPixels(converter, NULL, width * 4, (UINT)out->bytes, out->bits);
+    if (FAILED(hr)) goto done;
+    decoded_image_finish(out);
+
+done:
+    if (FAILED(hr)) decoded_image_free(out);
+    if (converter) IWICFormatConverter_Release(converter);
+    if (rotator) IWICBitmapFlipRotator_Release(rotator);
+    if (frame) IWICBitmapFrameDecode_Release(frame);
+    if (decoder) IWICBitmapDecoder_Release(decoder);
+    return hr;
+}
+
+/* ------------------------------------------------------------------------
+ * 公開関数
+ * ------------------------------------------------------------------------ */
+
+HRESULT decoder_context_init(DecoderContext *context)
+{
+    memset(context, 0, sizeof(*context));
+    return CoCreateInstance(&CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER,
+                            &IID_IWICImagingFactory, (void **)&context->wic);
+}
+
+void decoder_context_free(DecoderContext *context)
+{
+    svg_release_factory(context);
+    if (context->wic) IWICImagingFactory_Release(context->wic);
+    memset(context, 0, sizeof(*context));
+}
+
+HRESULT decoder_decode(DecoderContext *context, const wchar_t *path, bool autoOrientation,
+                       DecodedImage *out)
+{
+    memset(out, 0, sizeof(*out));
+    if (!context->wic) return E_POINTER;
+
+    if (format_kind(path) == FORMAT_KIND_SVG) return svg_decode(context, path, out);
+    return decode_wic(context->wic, path, autoOrientation, out);
+}
