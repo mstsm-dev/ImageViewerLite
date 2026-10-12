@@ -65,3 +65,12 @@ MSYSシェル (`/usr/bin/gcc`) ではなく UCRT64 の GCC を利用してくだ
 The application defines `wWinMain`; link with `-municode -mwindows` on
 MSYS2 UCRT64 MinGW-w64 GCC. Without `-municode`, the linker may report
 `undefined reference to WinMain`.
+
+## アイコン (v1.3)
+
+`src/LiteViewer.ico` に 16/24/32/48/64/96/128/256 ピクセルを収録。
+`src/resource.rc` の `101 ICON "src/LiteViewer.ico"` からEXEに埋め込みます。
+`src/main.c` のウィンドウクラスではID 101を `LoadImageW` で読み込み、
+タイトルバー、Alt+Tab、タスクバー、ExplorerのEXE表示に反映します。
+`Makefile`ではアイコンの更新時にも `.res` が再生成されます。
+変更反映時は `make clean && make` を実行してください。

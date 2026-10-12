@@ -1,2 +1,4 @@
+// Main application icon (Explorer, shortcuts, taskbar)
+101 ICON "src/LiteViewer.ico"
 #include <windows.h>
 1 24 "src/manifest.xml"
