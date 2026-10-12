@@ -59,3 +59,9 @@ MSYSシェル (`/usr/bin/gcc`) ではなく UCRT64 の GCC を利用してくだ
 - 補間モードの高品質指定は不透明画像でHALFTONEを使用します。透明画像の拡縮はAlphaBlendによります。
 - 単一EXEでの動作はWindows標準DLLへの依存を前提とし、Windows実機での依存DLL検証は未実施です。
 - 仕様書v1.0の完全実装としてではなく、Windows向けビルドと実機試験が必要な実装初版です。
+
+### UCRT64 Unicode entry-point note (v1.2)
+
+The application defines `wWinMain`; link with `-municode -mwindows` on
+MSYS2 UCRT64 MinGW-w64 GCC. Without `-municode`, the linker may report
+`undefined reference to WinMain`.

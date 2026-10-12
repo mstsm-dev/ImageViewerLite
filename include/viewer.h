@@ -1,10 +1,20 @@
 #ifndef LITEVIEWER_H
 #define LITEVIEWER_H
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef COBJMACROS
 #define COBJMACROS
+#endif
+#ifndef UNICODE
 #define UNICODE
+#endif
+#ifndef _UNICODE
 #define _UNICODE
+#endif
+#ifndef _WIN32_WINNT
 #define _WIN32_WINNT 0x0A00
+#endif
 #include <windows.h>
 #include <windowsx.h>
 #include <commctrl.h>
@@ -27,7 +37,7 @@ typedef enum { VIEW_NORMAL, VIEW_SIMPLE, VIEW_FULLSCREEN } WindowMode;
 typedef struct { wchar_t *path; wchar_t *name; ULONGLONG size; FILETIME modified; } FileEntry;
 typedef struct { FileEntry *items; size_t count, capacity, index; wchar_t *directory; } FileList;
 typedef struct { int width, height, stride; BYTE *pixels; BOOL hasAlpha; } Decoded;
-typedef struct { wchar_t *path; HBITMAP bitmap; HDC dc; void *bits; int w,h; BOOL alpha; size_t bytes; unsigned long long tick; } CacheEntry;
+typedef struct { wchar_t *path; HBITMAP bitmap; HDC dc; HGDIOBJ oldBitmap; void *bits; int w,h; BOOL alpha; size_t bytes; unsigned long long tick; } CacheEntry;
 typedef struct {
   FitMode initialFit; SortMode sort; BOOL descending, loop, zoomLock;
   BOOL highQuality, checkerboard, autoOrientation, statusbar;
