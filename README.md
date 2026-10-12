@@ -25,6 +25,7 @@ MSYSシェル (`/usr/bin/gcc`) ではなく UCRT64 の GCC を利用してくだ
 | キー | 操作 |
 |---|---|
 | Ctrl+O | 画像を開く |
+| I | 画像情報（ファイル名・パス・形式・サイズ・順番・更新日時） |
 | Ctrl+C | 表示中画像を元の解像度でクリップボードへコピー |
 | Left / ホイール上 | 前画像 |
 | Right / ホイール下 | 次画像 |
@@ -83,3 +84,9 @@ Ctrl+C、［ファイル → 画像をコピー］、右クリックメニュー
 
 ## v1.5: Resources
 Menus, context menu, settings dialog, accelerator keys, error/about strings and icon/manifest are defined in `src/resource.rc`. Resource IDs are in `include/resource.h`. The C code handles resource commands and populates combo box options; it no longer constructs menus or dialog controls with `CreateWindow`. Build using `make clean && make` in MSYS2 UCRT64.
+
+## v1.7 画像情報ダイアログ
+
+`I` キー、［ファイル → 画像の情報］、右クリックメニューで表示します。`src/resource.rc` に `IDD_IMAGEINFO` を定義し、`src/info.c` が既存のファイル一覧とデコード済み画像キャッシュから値を取得します。
+
+表示項目: ファイル名、ファイルの場所、フルパス、ファイル形式、元のサイズ、現在の表示サイズ、ディスク上のサイズ、メモリ上のサイズ、フォルダ内の順番、ファイル更新日時。解像度（DPI）、印刷サイズ、使用色数、読み込み時間は表示しません。画像読み込み中は取得不能な項目を「読み込み中」などで示します。

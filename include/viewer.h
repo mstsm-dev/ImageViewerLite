@@ -80,6 +80,7 @@ void app_zoom(App *a, double factor, int x, int y);
 void app_fit(App *a, FitMode mode);
 void app_refresh_ui(App *a);
 void app_show_settings(App *a);
+void app_show_image_info(App *a);
 void app_toggle_mode(App *a, WindowMode mode);
 void app_clear_cache(App *a);
 void app_resize_backbuffer(App *a, int w, int h);
