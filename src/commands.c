@@ -7,7 +7,6 @@
 #include "formats.h"
 
 #include <commdlg.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <wchar.h>
@@ -116,15 +115,6 @@ static void show_settings(App *a)
     }
 }
 
-static void show_about(App *a)
-{
-    wchar_t format[256];
-    wchar_t text[512];
-    res_string(IDS_ABOUT_FORMAT, format, ARRAY_COUNT(format));
-    swprintf(text, ARRAY_COUNT(text), format, APP_NAME, APP_VERSION);
-    MessageBoxW(a->hwnd, text, APP_NAME, MB_OK | MB_ICONINFORMATION);
-}
-
 static void toggle_fullscreen(App *a)
 {
     window_set_mode(a, a->mode == VIEW_FULLSCREEN ? a->modeBeforeFullscreen : VIEW_FULLSCREEN);
@@ -179,7 +169,7 @@ void commands_execute(App *a, int id)
 
     /* 設定・ヘルプ */
     case IDM_SETTINGS:  show_settings(a); break;
-    case IDM_ABOUT:     show_about(a); break;
+    case IDM_ABOUT:     about_dialog_show(a->hwnd); break;
     }
 }
 

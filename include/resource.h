@@ -5,6 +5,7 @@
  * 番号帯：
  *   100番台 アイコン / 200番台 メニュー・アクセラレータ / 300番台 ダイアログ
  *   400番台 設定ダイアログの部品 / 600番台 画像情報ダイアログの部品
+ *   700番台 バージョン情報ダイアログの部品
  *   1000番台 コマンド（メニュー・アクセラレータ共通）
  *   2000番台以降 文字列（STRINGTABLE）
  */
@@ -22,6 +23,7 @@
 /* ---- ダイアログ ---- */
 #define IDD_SETTINGS            301
 #define IDD_IMAGEINFO           302
+#define IDD_ABOUT               303
 
 /* ---- 設定ダイアログの部品 ---- */
 #define IDC_FIT                 401
@@ -41,6 +43,9 @@
 #define IDC_INFO_MEMORYSIZE     608
 #define IDC_INFO_POSITION       609
 #define IDC_INFO_MODIFIED       610
+
+/* ---- バージョン情報ダイアログの部品 ---- */
+#define IDC_ABOUT_TITLE         701 /* 「アプリ名 版数」を C から設定 */
 
 /* ---- コマンド：ファイル ---- */
 #define IDM_OPEN                1001
@@ -80,7 +85,7 @@
 #define IDM_SORT_DESC           1044
 
 /* ---- 文字列：メッセージ ---- */
-#define IDS_ABOUT_FORMAT        2001
+#define IDS_ABOUT_FORMAT        2001 /* 書式: %ls %ls（アプリ名・版数） */
 #define IDS_CLIPBOARD_ERROR     2002
 #define IDS_SAVE_ERROR          2003
 #define IDS_WORKER_ERROR        2004

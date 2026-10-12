@@ -2,8 +2,8 @@
 
 Windows 10/11 向けの閲覧専用・軽量画像ビューア。C11 / Win32 API / WIC / Direct2D / GDI のみで構成し、インストール不要の単一 EXE で動作します。
 
-- 版数：1.0.0
-- 仕様：`ImageViewerLite_仕様書_v1.0.md`
+- 版数：1.0.1
+- 仕様：`ImageViewerLite_仕様書_v1.0.1.md`
 - 変更履歴：`CHANGELOG.md`
 
 ## 生成AIによる作成について
@@ -55,7 +55,7 @@ Linux からのクロスビルドは `make CROSS=x86_64-w64-mingw32-` で行え�
 ```text
 ImageViewerLite/
 ├── Makefile
-├── README.md / CHANGELOG.md / ImageViewerLite_仕様書_v1.0.md
+├── README.md / CHANGELOG.md / ImageViewerLite_仕様書_v1.0.1.md
 ├── ImageViewerLite.ini        既定の設定ファイル（EXE と同じフォルダに置く）
 ├── include/
 │   ├── common.h               Windows ヘッダ設定・共通ユーティリティ
@@ -80,6 +80,7 @@ ImageViewerLite/
 │   ├── settings.c             INI 読み書き（表駆動）
 │   ├── settings_dialog.c      表示設定ダイアログ
 │   ├── info_dialog.c          画像情報ダイアログ
+│   ├── about_dialog.c         バージョン情報ダイアログ
 │   ├── clipboard.c            クリップボードコピー
 │   └── util.c                 文字列・パス・リソース文字列
 ├── res/

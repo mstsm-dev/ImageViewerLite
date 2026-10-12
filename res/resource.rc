@@ -222,13 +222,29 @@ BEGIN
 END
 
 // ---------------------------------------------------------------------------
+// バージョン情報ダイアログ（通常のダイアログなので MessageBox のような通知音は鳴らない）
+// ---------------------------------------------------------------------------
+
+IDD_ABOUT DIALOGEX 0, 0, 220, 92
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "ImageViewerLite のバージョン情報"
+FONT 9, "MS Shell Dlg 2", 400, 0, 0x1
+BEGIN
+  ICON          IDI_APP,                            -1,              12, 12,  21, 20
+  LTEXT         "",                                 IDC_ABOUT_TITLE, 44, 12, 164, 10
+  LTEXT         "C11 / Win32 / WIC / Direct2D (SVG) / GDI", -1,      44, 26, 164, 10
+  LTEXT         "閲覧専用の軽量画像ビューア",       -1,              44, 38, 164, 10
+  DEFPUSHBUTTON "OK",                               IDOK,           158, 68,  50, 15
+END
+
+// ---------------------------------------------------------------------------
 // 文字列
 // ---------------------------------------------------------------------------
 
 STRINGTABLE
 BEGIN
   // メッセージ（IDS_ABOUT_FORMAT の %ls はアプリ名と版数）
-  IDS_ABOUT_FORMAT        "%ls %ls\nC11 / Win32 / WIC / Direct2D (SVG) / GDI\n閲覧専用の軽量画像ビューア"
+  IDS_ABOUT_FORMAT        "%ls %ls"
   IDS_CLIPBOARD_ERROR     "表示中の画像をクリップボードにコピーできません。画像の読込完了後に再試行してください。"
   IDS_SAVE_ERROR          "INIを保存できませんでした。設定は今回の実行中だけ有効です。"
   IDS_WORKER_ERROR        "画像読込スレッドを作成できません。"

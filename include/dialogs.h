@@ -1,5 +1,5 @@
 /*
- * dialogs.h — 設定ダイアログ・画像情報ダイアログ
+ * dialogs.h — 設定ダイアログ・画像情報ダイアログ・バージョン情報ダイアログ
  *
  * レイアウトと固定ラベルは resource.rc の DIALOGEX で定義する。
  * C 側は値の入出力と検証だけを担当し、App 全体には依存しない。
@@ -26,7 +26,10 @@ typedef struct {
     double zoom;
 } ImageInfo;
 
-/* 画像情報ダイアログ（仕様書 v1.7 追加仕様）。モーダル。 */
+/* 画像情報ダイアログ（仕様書 付録B）。モーダル。 */
 void info_dialog_show(HWND owner, const ImageInfo *info);
+
+/* バージョン情報ダイアログ。モーダル。通知音は鳴らさない。 */
+void about_dialog_show(HWND owner);
 
 #endif /* IVL_DIALOGS_H */

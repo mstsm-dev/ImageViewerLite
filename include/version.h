@@ -10,8 +10,8 @@
 
 #define IVL_VERSION_MAJOR 1
 #define IVL_VERSION_MINOR 0
-#define IVL_VERSION_PATCH 0
-#define IVL_VERSION_STRING "1.0.0"
+#define IVL_VERSION_PATCH 1
+#define IVL_VERSION_STRING "1.0.1"
 
 #define IVL_APP_NAME_STRING "ImageViewerLite"
 #define IVL_EXE_NAME_STRING "ImageViewerLite.exe"
