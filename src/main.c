@@ -61,22 +61,11 @@ void app_show_settings(App *a){
  if(a->settingsWindow){SetForegroundWindow(a->settingsWindow);return;}
  DialogBoxParamW(GetModuleHandleW(NULL),MAKEINTRESOURCEW(IDD_SETTINGS),a->hwnd,settings_proc,(LPARAM)a);
 }
-static void key(App *a,WPARAM code){
- // Accelerator commands are managed by the resource table; arrows pan the image.
- switch(code){
- case VK_UP:a->panY+=40;break;
- case VK_DOWN:a->panY-=40;break;
- case VK_LEFT:a->panX+=40;break;
- case VK_RIGHT:a->panX-=40;break;
- default:return;
- }
- InvalidateRect(a->hwnd,NULL,FALSE);
-}
 static LRESULT CALLBACK wndproc(HWND h,UINT m,WPARAM wp,LPARAM lp){App *a=(App*)GetWindowLongPtrW(h,GWLP_USERDATA);if(m==WM_NCCREATE){a=((CREATESTRUCTW*)lp)->lpCreateParams;SetWindowLongPtrW(h,GWLP_USERDATA,(LONG_PTR)a);return TRUE;}if(!a)return DefWindowProcW(h,m,wp,lp);switch(m){case WM_CREATE:{a->hwnd=h;DragAcceptFiles(h,TRUE);a->status=CreateWindowExW(0,STATUSCLASSNAMEW,L"",WS_CHILD|WS_VISIBLE|SBARS_SIZEGRIP,0,0,0,0,h,NULL,GetModuleHandleW(NULL),NULL);return 0;}
 case WM_SIZE:if(a->status){ShowWindow(a->status,a->mode==VIEW_NORMAL&&a->cfg.statusbar?SW_SHOW:SW_HIDE);SendMessageW(a->status,WM_SIZE,0,0);} {RECT r;GetClientRect(h,&r);app_resize_backbuffer(a,r.right,r.bottom);if(!a->zoomLock&&a->fit!=FIT_MANUAL)app_fit(a,a->fit);}return 0;
 case WM_PAINT:app_paint(a);return 0;case WM_ERASEBKGND:return 1;case WM_COMMAND:
  if(LOWORD(wp)==IDM_EXIT&&a->mode==VIEW_FULLSCREEN)execute(a,IDM_FULLSCREEN);
- else execute(a,LOWORD(wp));return 0;case WM_KEYDOWN:key(a,wp);return 0;
+ else execute(a,LOWORD(wp));return 0;
 case WM_MOUSEWHEEL:{int d=GET_WHEEL_DELTA_WPARAM(wp);a->wheelDelta+=d;while(a->wheelDelta>=WHEEL_DELTA){a->wheelDelta-=WHEEL_DELTA;if(GET_KEYSTATE_WPARAM(wp)&MK_CONTROL){POINT p={GET_X_LPARAM(lp),GET_Y_LPARAM(lp)};ScreenToClient(h,&p);app_zoom(a,a->cfg.zoomStep,p.x,p.y);}else execute(a,IDM_PREV);}while(a->wheelDelta<=-WHEEL_DELTA){a->wheelDelta+=WHEEL_DELTA;if(GET_KEYSTATE_WPARAM(wp)&MK_CONTROL){POINT p={GET_X_LPARAM(lp),GET_Y_LPARAM(lp)};ScreenToClient(h,&p);app_zoom(a,1/a->cfg.zoomStep,p.x,p.y);}else execute(a,IDM_NEXT);}return 0;}
 case WM_LBUTTONDOWN:a->dragging=TRUE;a->lastMouse.x=GET_X_LPARAM(lp);a->lastMouse.y=GET_Y_LPARAM(lp);SetCapture(h);return 0;case WM_MOUSEMOVE:if(a->dragging){POINT p={GET_X_LPARAM(lp),GET_Y_LPARAM(lp)};a->panX+=p.x-a->lastMouse.x;a->panY+=p.y-a->lastMouse.y;a->lastMouse=p;InvalidateRect(h,NULL,FALSE);}return 0;case WM_LBUTTONUP:if(a->dragging){a->dragging=FALSE;ReleaseCapture();}return 0;case WM_CAPTURECHANGED:a->dragging=FALSE;return 0;case WM_LBUTTONDBLCLK:execute(a,IDM_FULLSCREEN);return 0;case WM_CONTEXTMENU:{POINT p={GET_X_LPARAM(lp),GET_Y_LPARAM(lp)};if(p.x==-1&&p.y==-1){RECT r;GetWindowRect(h,&r);p.x=r.left+40;p.y=r.top+40;}TrackPopupMenu(popupMenu,TPM_RIGHTBUTTON,p.x,p.y,0,h,NULL);return 0;}
 case WM_DROPFILES:{HDROP drop=(HDROP)wp;wchar_t path[32768];if(DragQueryFileW(drop,0,path,32768))app_open(a,path);DragFinish(drop);return 0;}
