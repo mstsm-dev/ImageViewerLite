@@ -85,7 +85,9 @@ void app_clear_cache(App *a);
 void app_resize_backbuffer(App *a, int w, int h);
 void app_paint(App *a);
 void app_update_status(App *a);
+BOOL app_copy_image_to_clipboard(App *a);
 
+#define IDM_COPY 1000
 #define IDM_OPEN 1001
 #define IDM_RELOAD 1002
 #define IDM_EXIT 1003

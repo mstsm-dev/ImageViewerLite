@@ -13,7 +13,7 @@ $(TARGET): $(OBJECTS) build/resource.o
 build/%.o: src/%.c include/viewer.h
 	@mkdir -p build
 	$(CC) $(CFLAGS) -c $< -o $@
-build/resource.o: src/resource.rc src/LiteViewer.ico src/manifest.xml
+build/resource.o: src/resource.rc src/LiteViewer.ico src/manifest.xml src/LiteViewer.ico src/manifest.xml
 	@mkdir -p build
 	$(WINDRES) -i $< -o $@
 clean:
